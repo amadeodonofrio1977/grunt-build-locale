@@ -20,7 +20,9 @@ module.exports = function(grunt) {
             dest: '.',
             filterLocale: [],
             prefix: '',
-            sufix: ''
+            sufix: '',
+            namespace: false,
+            stripNamespaceBase: ''
         });
 
         grunt.log.debug('Options: ', JSON.stringify(options));
@@ -62,6 +64,45 @@ module.exports = function(grunt) {
             }
         }
 
+        /**
+         * Transforms locales inot a namespace format
+         * @param  {Object} file                    locale object
+         * @param  {String} filepath                path of file
+         * @param  {String} locale                  locale string
+         * @return {Object} transformedLocales      transformed locale object
+         */
+        function transformLocales (file, filepath, locale) {
+            var transformedLocales = {};
+            var keys = Object.keys(file);
+            var namespace;
+
+            // Compiles a namespace based on directory structure of filepath
+            function getNameSpace() {
+                var namespace = filepath;
+                var localeIndex = namespace.indexOf(locale);
+                namespace = namespace.substring(0, localeIndex);
+                if(options.stripNamespaceBase) {
+                    grunt.log.debug('APP BASE--> ', options.stripNamespaceBase);
+                    namespace = namespace.replace(options.stripNamespaceBase, '');
+                }
+                namespace = namespace.replace(/\//g, '.');
+                return namespace;
+            }
+
+            namespace = getNameSpace();
+
+            // Loop though keys of file
+            // add a new transformed key/value pair 
+            // to transformedLocales object
+            keys.map(
+                function updateKey(l, i){                    
+                    transformedLocales[namespace + l ] = file[l]
+                }
+            );
+
+            return transformedLocales;
+        }
+
         var files = [];
         var localeData = {};
         var locales = [];
@@ -88,6 +129,7 @@ module.exports = function(grunt) {
         // iterate all files
         files.forEach(function(filepath) {
             var locale;
+            var transformedLocales
             // detect locale
             if (!(locale = detectLocale(filepath))) {
                 var message = 'Could not detect locale for file "' + filepath + '".' + "\n";
@@ -104,7 +146,15 @@ module.exports = function(grunt) {
             if (!localeData[locale]) {
                 localeData[locale] = {};
             }
-            extend(true, localeData[locale], grunt.file.readJSON(filepath));
+
+            grunt.log.debug(filepath, locale);
+
+            if (!options.namespace) {
+                extend(true, localeData[locale], grunt.file.readJSON(filepath));
+            } else {
+                transformedLocales = transformLocales(grunt.file.readJSON(filepath), filepath, locale);
+                extend(true, localeData[locale], transformedLocales);
+            }
         });
 
         grunt.log.debug("Generating locale dist files...");
